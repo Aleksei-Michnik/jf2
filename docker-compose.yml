@@ -1,0 +1,56 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jf2
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Jellyfin configuration and cache
+      - ./config:/config
+      - ./cache:/cache
+      
+      # =======================================================================
+      # MEDIA VOLUMES - Add your media paths below
+      # =======================================================================
+      # Format: /host/path:/media/library_name:ro
+      # The :ro suffix makes mounts read-only (recommended for media)
+      #
+      # Example configurations for multiple locations per category:
+      #
+      # Movies from multiple drives:
+      # - /mnt/d/Movies:/media/movies_d:ro
+      # - /mnt/e/Movies:/media/movies_e:ro
+      # - /mnt/f/Movies/Collection:/media/movies_collection:ro
+      #
+      # TV Shows from multiple locations:
+      # - /mnt/d/TVShows:/media/tvshows_d:ro
+      # - /mnt/e/Series:/media/tvshows_e:ro
+      #
+      # Music libraries:
+      # - /mnt/d/Music:/media/music_main:ro
+      # - /mnt/e/Music/Lossless:/media/music_lossless:ro
+      #
+      # =======================================================================
+      # ADD YOUR MEDIA PATHS HERE:
+      # =======================================================================
+      # - /mnt/your/path:/media/your_library:ro
+      
+    ports:
+      - "${JELLYFIN_PORT:-8096}:8096"
+      - "${JELLYFIN_HTTPS_PORT:-8920}:8920"  # Optional HTTPS port
+    networks:
+      - jellyfin-net
+    # Hardware acceleration (uncomment if needed)
+    # devices:
+    #   - /dev/dri:/dev/dri  # Intel/AMD GPU
+    # For NVIDIA GPU support, use runtime instead:
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=all
+
+networks:
+  jellyfin-net:
+    driver: bridge
