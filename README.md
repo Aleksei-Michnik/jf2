@@ -45,7 +45,9 @@ This project provides a containerized Jellyfin media server configuration that:
    docker compose up -d
    ```
 
-5. Access Jellyfin at `http://<host-ip>:8096`
+5. Access Jellyfin at `http://localhost:8096` or `http://<host-ip>:8096`
+
+6. Complete the Setup Wizard (see [Initial Setup](#initial-setup) below)
 
 ## Project Structure
 
@@ -116,6 +118,64 @@ In WSL, Windows drives are mounted under `/mnt/`:
 The following volumes are automatically configured:
 - `/config`: Jellyfin server configuration and database
 - `/cache`: Transcoding cache and temporary files
+
+## Initial Setup
+
+After starting the container for the first time, you need to complete the Jellyfin Setup Wizard.
+
+### Step 1: Access the Setup Wizard
+
+Open your browser and navigate to:
+- **Local**: `http://localhost:8096`
+- **Network**: `http://<your-ip>:8096` (find IP with `hostname -I | awk '{print $1}'`)
+
+If you see a "Select Server" screen with old entries:
+1. Delete any stale server entries
+2. Click "Add Server"
+3. Enter `http://localhost:8096` and click "Connect"
+
+If you see a login page but have no credentials, go directly to:
+- `http://localhost:8096/web/#/wizardstart.html`
+
+### Step 2: Setup Wizard Steps
+
+1. **Select Language** - Choose your preferred display language
+
+2. **Create Admin User** - Set your username and password (remember these!)
+
+3. **Add Media Libraries**:
+   - Click "Add Media Library"
+   - Select content type (e.g., "Movies", "TV Shows", "Music")
+   - Click the "+" button to add a folder
+   - Select from available paths (your mounted media folders):
+     - `/media/films` - Movies from your Films folder
+     - Add more paths as configured in `docker-compose.yml`
+   - Configure metadata settings (language, country)
+   - Click "OK" to save
+
+4. **Preferred Metadata Language** - Select language for movie/show metadata
+
+5. **Remote Access** - Configure if you want to access from outside your network
+   - Enable "Allow remote connections to this server" for network access
+   - Keep "Enable automatic port mapping" unchecked for local-only access
+
+6. **Complete Setup** - Click "Finish" to complete the wizard
+
+### Step 3: Post-Setup Configuration
+
+After completing the wizard:
+
+1. **Scan Libraries**: Go to Dashboard → Libraries → click "Scan All Libraries"
+2. **Configure Users**: Add additional users in Dashboard → Users
+3. **Set up Transcoding**: Configure hardware acceleration in Dashboard → Playback → Transcoding
+4. **Install Plugins**: Browse available plugins in Dashboard → Plugins → Catalog
+
+### Browser Cache Issues
+
+If you encounter connection errors after restarting the container:
+1. Clear your browser's local storage for the Jellyfin site
+2. Or open in an incognito/private window
+3. Or manually delete stale server entries and re-add `http://localhost:8096`
 
 ## Usage
 
