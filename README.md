@@ -578,14 +578,14 @@ For Samsung TVs from 2019 onwards (RU series, TU series, etc.) that don't have a
 
 1. **Press Home** button on remote
 2. **Navigate to Settings** (gear icon)
-3. **Select All Settings** (or just "Settings" on some models)
-4. **Go to Support**
-5. **Select Device Care**
-6. **Choose Manage Storage**
-7. **Find and select Jellyfin** in the app list
-8. **Click View Details**
-9. **Select Clear Cache** to remove temporary files
-10. *(Optional)* Select **Clear Data** to reset the app completely (will require re-login)
+3. **Go to Support**
+4. **Select Self Diagnostics**
+5. **Choose TV Device Manager**
+6. **Select Show App List** under **Manage Storage**
+6. **Find and select Jellyfin** in the app list
+7. **Click View Details**
+8. **Select Clear Cache** to remove temporary files
+9. *(Optional)* Select **Clear Data** to reset the app completely (will require re-login)
 
 #### Method 2: Via Apps Panel
 
