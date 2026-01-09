@@ -348,6 +348,279 @@ fi
 **Key Insight:**
 Docker's health check only verifies the container's internal state, not the host port bindings. A container can be "healthy" internally while its ports are unreachable from the host.
 
+## Issues Handling
+
+### Issue: Samsung TV Jellyfin App Playback Error
+
+**Symptoms:**
+- Web interface at `http://192.168.1.173:8096` plays films correctly
+- Samsung TV Jellyfin app (installed via Tizen) shows library and can browse content
+- Playback fails with error: "Playback Error: There was an error processing the request"
+- TV app was installed using: `docker run --rm ghcr.io/georift/install-jellyfin-tizen 192.168.1.152`
+
+**Environment:**
+- Jellyfin server running in Docker on WSL2
+- Windows host IP: `192.168.1.173`
+- Samsung TV IP: `192.168.1.152`
+- Docker container internal IP: `172.19.0.2`
+
+#### Investigation Method
+
+**Step 1: Log Analysis**
+```bash
+docker logs jf2 --tail 100 | grep -i -E "(error|fail|transcode|samsung|tizen|playback)"
+```
+- Found transcoding was working correctly for web playback
+- No Samsung/Tizen specific errors in logs
+- FFmpeg commands executing successfully
+
+**Step 2: Configuration Review**
+Examined key configuration files:
+- `config/config/network.xml` - Network settings
+- `config/config/encoding.xml` - Transcoding settings
+- `config/config/system.xml` - Server settings
+
+**Step 3: Network Architecture Analysis**
+```bash
+# Check Docker container IP
+docker exec jf2 hostname -I
+# Output: 172.19.0.2
+
+# Check Windows host IPs
+powershell.exe -Command "ipconfig" | grep "IPv4"
+# Found: 192.168.1.173 (LAN), 172.19.0.1 (Docker), etc.
+```
+
+**Step 4: Root Cause Identification**
+The issue was in `config/config/network.xml`:
+- `EnablePublishedServerUriByRequest` was `false`
+- `PublishedServerUriBySubnet` was empty
+- `EnableUPnP` was `false`
+
+#### Diagnosis
+
+**Root Cause:** Docker NAT URL Translation Issue
+
+When the Samsung TV requests media playback:
+1. TV connects to `192.168.1.173:8096` ✓ (browsing works)
+2. TV requests media stream
+3. Jellyfin returns stream URLs with internal Docker IP `172.19.0.2:8096`
+4. TV cannot reach `172.19.0.2` ✗ → **Playback Error**
+
+The web browser works because:
+- It runs on the same machine or network segment
+- Docker port forwarding handles the translation transparently
+- Browser requests go through `localhost` or the host IP directly
+
+The Samsung TV fails because:
+- It's on a different device (192.168.1.152)
+- It receives URLs pointing to unreachable Docker internal network
+- No NAT translation occurs for the returned stream URLs
+
+#### Solution
+
+**Modified `config/config/network.xml`:**
+
+1. **Published Server URI** (Critical Fix):
+```xml
+<EnablePublishedServerUriByRequest>true</EnablePublishedServerUriByRequest>
+<PublishedServerUriBySubnet>
+  <string>192.168.1.0/24=http://192.168.1.173:8096</string>
+</PublishedServerUriBySubnet>
+```
+This tells Jellyfin to return `http://192.168.1.173:8096` for all clients on the 192.168.1.x network.
+
+2. **Local Network Subnets**:
+```xml
+<LocalNetworkSubnets>
+  <string>192.168.1.0/24</string>
+</LocalNetworkSubnets>
+```
+
+3. **Enable UPnP** (for better device discovery):
+```xml
+<EnableUPnP>true</EnableUPnP>
+```
+
+**Application Steps:**
+```bash
+# Stop container to prevent config overwrite
+docker stop jf2
+
+# Fix file permissions (owned by root due to PUID=0)
+sudo chmod 666 config/config/network.xml
+
+# Edit the file with the changes above
+# (or use the web UI: Dashboard → Networking)
+
+# Restart container
+docker start jf2
+
+# Verify configuration loaded
+docker logs jf2 --tail 30 | grep -i subnet
+# Should show: Used LAN subnets: ["192.168.1.0/24"]
+```
+
+#### Verification
+
+After applying the fix:
+```bash
+# Check config persisted
+grep -A1 "PublishedServerUriBySubnet" config/config/network.xml
+# Should show: 192.168.1.0/24=http://192.168.1.173:8096
+
+# Check logs for proper initialization
+docker logs jf2 --tail 30 | grep -i -E "(subnet|publish|upnp)"
+# Should show:
+# - Defined LAN subnets: ["192.168.1.0/24"]
+# - Used LAN subnets: ["192.168.1.0/24"]
+# - Starting NAT discovery
+```
+
+**Test from Samsung TV:**
+1. Open Jellyfin app
+2. Select any movie
+3. Press Play
+4. Playback should now work
+
+#### If Issue Persists
+
+1. **Clear TV app cache**: See [Clearing App Cache on Samsung TV](#clearing-app-cache-on-samsung-tv-ru7172-and-similar-2019-models) below
+2. **Re-login on TV**: Sign out and sign back in to refresh session
+3. **Check Windows Firewall**: Ensure port 8096 is allowed from 192.168.1.152
+4. **Verify IP hasn't changed**: Re-run `powershell.exe -Command "ipconfig"` to confirm 192.168.1.173
+
+#### Key Learnings
+
+1. **Docker NAT Limitation**: Containers don't know their external IP; they return internal Docker network IPs in API responses
+2. **Published Server URI**: Essential for any Docker/NAT setup where clients connect from different network segments
+3. **Config File Permissions**: Jellyfin runs as root (PUID=0) in this setup, so config files are owned by root
+4. **Config Persistence**: Jellyfin may rewrite config files on startup; stop container before editing
+
+---
+
+### Issue: Samsung TV Jellyfin App Version Mismatch Playback Error
+
+**Symptoms:**
+- Samsung TV Jellyfin app shows library content correctly (can browse movies/shows)
+- Pressing Play results in error: "Playback Error: There was an error processing the request"
+- Web browser playback works fine
+- No errors in Jellyfin server logs when playback fails on TV
+- TV was previously working but stopped after server update
+
+**Reference:** GitHub Issues [jellyfin-tizen#343](https://github.com/jellyfin/jellyfin-tizen/issues/343) and [jellyfin-tizen#359](https://github.com/jellyfin/jellyfin-tizen/issues/359)
+
+#### Root Cause
+
+**Version mismatch** between the Samsung TV Tizen app and the Jellyfin server. The Tizen app is built with a specific version of jellyfin-web that must match (or be compatible with) the server version.
+
+Example:
+- Server version: 10.11.5
+- TV app built with: jellyfin-web 10.10.z (older, incompatible)
+
+#### Solution: Reinstall Samsung TV Jellyfin App with Matching Version
+
+**Step 1: Check Your Server Version**
+```bash
+curl -s http://localhost:8096/System/Info/Public | grep -oP '"Version":"\K[^"]+'
+# Example output: 10.11.5
+```
+
+**Step 2: Install Matching TV App Version**
+
+Using the `georift/install-jellyfin-tizen` tool, reinstall with the correct version:
+
+```bash
+# For server version 10.11.x (recommended for 10.11.5):
+docker run --rm ghcr.io/georift/install-jellyfin-tizen 192.168.1.152 Jellyfin-10.11.z
+
+# For server version 10.10.x:
+docker run --rm ghcr.io/georift/install-jellyfin-tizen 192.168.1.152 Jellyfin-10.10.z
+
+# Default (uses latest stable jellyfin-web):
+docker run --rm ghcr.io/georift/install-jellyfin-tizen 192.168.1.152
+```
+
+Replace `192.168.1.152` with your Samsung TV's IP address.
+
+**Available build variants:**
+- `Jellyfin` - Default build (latest stable)
+- `Jellyfin-10.11.z` - For server 10.11.x
+- `Jellyfin-10.10.z` - For server 10.10.x
+- `Jellyfin-TrueHD` - With TrueHD audio support
+- `Jellyfin-secondary` - Secondary installation (different app ID)
+
+See all available builds at: https://github.com/jeppevinkel/jellyfin-tizen-builds/releases
+
+**Step 3: Clear TV App Cache**
+
+After reinstalling, clear the app cache on the TV (see section below).
+
+**Step 4: Re-login on TV**
+
+Open the Jellyfin app on the TV and sign in again with your credentials.
+
+#### Samsung TV App Settings
+
+| Setting | Value |
+|---------|-------|
+| **Server Address** | `192.168.1.173` |
+| **Port** | `8096` |
+| **Full URL** | `http://192.168.1.173:8096` |
+
+---
+
+### Clearing App Cache on Samsung TV (RU7172 and Similar 2019+ Models)
+
+For Samsung TVs from 2019 onwards (RU series, TU series, etc.) that don't have an "Apps" menu in main settings, use **Device Care** instead:
+
+#### Method 1: Via Device Care (Recommended for RU7172)
+
+1. **Press Home** button on remote
+2. **Navigate to Settings** (gear icon)
+3. **Select All Settings** (or just "Settings" on some models)
+4. **Go to Support**
+5. **Select Device Care**
+6. **Choose Manage Storage**
+7. **Find and select Jellyfin** in the app list
+8. **Click View Details**
+9. **Select Clear Cache** to remove temporary files
+10. *(Optional)* Select **Clear Data** to reset the app completely (will require re-login)
+
+#### Method 2: Via Apps Panel
+
+1. **Press Home** button on remote
+2. **Navigate to Apps** (bottom row of icons)
+3. **Go to Settings** (gear icon in top-right of Apps panel)
+4. **Find Jellyfin** in the installed apps list
+5. **Select it and choose Delete** or look for cache options
+
+#### Method 3: Reinstall the App
+
+If cache clearing doesn't help, completely reinstall the app:
+
+```bash
+# The install command will automatically replace/update the existing app
+docker run --rm ghcr.io/georift/install-jellyfin-tizen 192.168.1.152 Jellyfin-10.11.z
+```
+
+#### Method 4: Cold Restart the TV
+
+Sometimes a simple cache clear isn't enough:
+
+1. **Turn off** the TV completely (not standby)
+2. **Unplug** the power cord for 30 seconds
+3. **Plug back in** and turn on
+4. Try the Jellyfin app again
+
+#### Tips
+
+- **Frequency**: Clear cache every 2-3 months for optimal performance
+- **After Updates**: Always clear cache after updating either the server or TV app
+- **Version Sync**: Keep server and TV app versions aligned (both 10.11.x or both 10.10.x)
+
+---
+
 ## License
 
 This project is provided as-is for personal use.
