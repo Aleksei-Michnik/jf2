@@ -290,6 +290,64 @@ docker compose down
 docker compose up -d
 ```
 
+### Server Inaccessible After Host Restart (Docker Port Binding Issue)
+
+**Symptoms:**
+- Container shows as "running" and "healthy" in `docker ps`
+- Connection refused when accessing `http://localhost:8096` or `http://<host-ip>:8096`
+- Samsung TV shows server in list but cannot connect
+- Browser shows "Unable to connect to the selected server"
+
+**Root Cause:**
+After a Windows/WSL2 host restart, Docker's port forwarding (docker-proxy) may not properly re-establish even though the container appears healthy. The container is running internally but the port bindings to the host are broken.
+
+**Diagnosis:**
+```bash
+# Check if container is running
+docker ps -a --filter "name=jf2"
+# Shows: Up X minutes (healthy)
+
+# Check if port is actually listening
+ss -tlnp | grep 8096
+# If empty - port is NOT listening despite container being "healthy"
+
+# Check docker-proxy processes
+ps aux | grep docker-proxy
+# If no docker-proxy for port 8096 - port forwarding is broken
+```
+
+**Solution:**
+Simply restart the container to re-establish port bindings:
+
+```bash
+# Restart the container
+docker compose restart
+
+# Wait for startup (10-15 seconds)
+sleep 10
+
+# Verify port is now listening
+ss -tlnp | grep 8096
+# Should show: LISTEN 0 4096 *:8096 *:*
+
+# Verify server is accessible
+curl -s http://localhost:8096/System/Info/Public | jq .
+```
+
+**Prevention:**
+Add a startup script or systemd service to restart Docker containers after WSL2 starts:
+
+```bash
+# Add to ~/.bashrc or create a startup script
+if ! ss -tlnp | grep -q ":8096"; then
+    echo "Jellyfin port not listening, restarting container..."
+    cd ~/jf2 && docker compose restart
+fi
+```
+
+**Key Insight:**
+Docker's health check only verifies the container's internal state, not the host port bindings. A container can be "healthy" internally while its ports are unreachable from the host.
+
 ## License
 
 This project is provided as-is for personal use.
