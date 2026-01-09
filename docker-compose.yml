@@ -36,9 +36,15 @@ services:
       # =======================================================================
       # ADD YOUR MEDIA PATHS HERE:
       # =======================================================================
-      # Films from Windows H: drive (accessed via symlink in WSL home directory)
-      # The symlink ~/Films -> /mnt/h/Films allows Docker Desktop to access Windows drives
-      - /home/alekseim/Films:/media/films:ro
+      # Films from Windows drives (accessed via symlinks in WSL home directory)
+      # The symlinks ~/Films -> /mnt/h/Films etc allow Docker Desktop to access Windows drives
+      - /home/alekseim/Films:/media/films:ro             # H:\Films
+      - /home/alekseim/Films_E:/media/films_e:ro         # E:\Films
+      
+      # TV Shows from multiple Windows drives
+      - /home/alekseim/Shows_C:/media/shows_c:ro         # C:\Users\Lenovo\Shows
+      - /home/alekseim/Shows_E:/media/shows_e:ro         # E:\Shows
+      - /home/alekseim/Shows_H:/media/shows_h:ro         # H:\Shows
       
     ports:
       - "${JELLYFIN_PORT:-8096}:8096"
