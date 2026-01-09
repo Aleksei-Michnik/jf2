@@ -572,9 +572,9 @@ Open the Jellyfin app on the TV and sign in again with your credentials.
 
 ### Clearing App Cache on Samsung TV (RU7172 and Similar 2019+ Models)
 
-For Samsung TVs from 2019 onwards (RU series, TU series, etc.) that don't have an "Apps" menu in main settings, use **Device Care** instead:
+For Samsung TVs from 2019 onwards (RU series, TU series, etc.) that don't have an "Apps" menu in main settings, use **Self Diagnostics** instead:
 
-#### Method 1: Via Device Care (Recommended for RU7172)
+#### Method 1: Via Self Diagnostics (Recommended for RU7172)
 
 1. **Press Home** button on remote
 2. **Navigate to Settings** (gear icon)
