@@ -113,6 +113,41 @@ In WSL, Windows drives are mounted under `/mnt/`:
 - `C:\Users\Name\Videos` → `/mnt/c/Users/Name/Videos`
 - `D:\Media\Movies` → `/mnt/d/Media/Movies`
 
+#### Setting Up Media Path Symlinks
+
+Docker Desktop for WSL2 requires paths to be accessible from the WSL home directory for reliable volume mounting. Create symlinks from your home directory to Windows drive paths:
+
+```bash
+# Create symlinks for Films
+ln -s /mnt/h/Films ~/Films          # For H:\Films
+ln -s /mnt/e/Films ~/Films_E        # For E:\Films
+
+# Create symlinks for TV Shows
+ln -s /mnt/c/Users/Lenovo/Shows ~/Shows_C   # For C:\Users\Lenovo\Shows
+ln -s /mnt/e/Shows ~/Shows_E        # For E:\Shows
+ln -s /mnt/h/Shows ~/Shows_H        # For H:\Shows
+```
+
+Then mount these symlinks in `docker-compose.yml`:
+```yaml
+volumes:
+  - /home/yourusername/Films:/media/films:ro
+  - /home/yourusername/Films_E:/media/films_e:ro
+  - /home/yourusername/Shows_C:/media/shows_c:ro
+  - /home/yourusername/Shows_E:/media/shows_e:ro
+  - /home/yourusername/Shows_H:/media/shows_h:ro
+```
+
+After updating docker-compose.yml, restart the container:
+```bash
+docker compose down && docker compose up -d
+```
+
+Verify mounts are accessible inside the container:
+```bash
+docker exec jf2 ls -la /media/
+```
+
 ### Volume Mounts
 
 The following volumes are automatically configured:
